@@ -6,7 +6,7 @@ Deadline: repository public and submission sent before 2026-11-14T23:59Z (Nov 15
 
 - Policy contract (`contract/`): allowlist, per-tx cap, daily cap, velocity, co-sign threshold, pause, owner/agent separation, spend log, `EVENT_JSON` events. 23 unit tests.
 - Policy engine (`engine/`): prompt-injection and scam heuristics, intent digest. 12 vitest tests.
-- README, threat model, MIT license, CI.
+- README, threat model, MIT license.
 
 ## Remaining
 

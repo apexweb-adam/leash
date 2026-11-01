@@ -69,7 +69,6 @@ Requirements: Rust stable (1.95 or newer, `near-sdk` 5.30 needs it) with `wasm32
 5. **Typecheck the engine.** `cd engine && npm run typecheck`
    See: no output, exit code 0.
 
-CI (`.github/workflows/ci.yml`) runs steps 1, 3, 4 and 5 on every push.
 
 ## Contract interface
 
