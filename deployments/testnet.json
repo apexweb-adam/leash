@@ -3,5 +3,7 @@
   "owner": "leash-owner-11020911.testnet",
   "contract": "leash-11020911.testnet",
   "agent": "leash-agent-11020911.testnet",
-  "merchant": "leash-coffee-11020911.testnet"
+  "merchant": "leash-coffee-11020911.testnet",
+  "wasm_sha256": "b0acc90e236e32beec65c3ba78ef590ea23b6e07d3b34ab5f66e1000468a0d0a",
+  "deployed_at": "2026-11-02T08:14:27.422Z"
 }

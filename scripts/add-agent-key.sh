@@ -26,13 +26,19 @@ fi
 
 near account list-keys "$AGENT" network-config testnet now
 
-echo "== check 1: function-call key tries a direct 1 NEAR transfer to owner (must FAIL)"
-if near tokens "$AGENT" send-near "$OWNER" '1 NEAR' network-config testnet \
-     sign-with-access-key-file "$FC" send 2>&1 | tee /tmp/leash-check1.log | tail -3; then :; fi
-if grep -qiE "error|fail|not allowed|permission" /tmp/leash-check1.log; then echo "OK: transfer rejected"; else echo "UNEXPECTED: transfer not rejected" >&2; exit 1; fi
+LOG="$(mktemp)"
+echo "== check 1: function-call key tries a direct 0.01 NEAR transfer to owner (must FAIL)"
+near tokens "$AGENT" send-near "$OWNER" '0.01 NEAR' network-config testnet \
+  sign-with-access-key-file "$FC" send >"$LOG" 2>&1 || true
+if grep -q "requires a full permission access key" "$LOG"; then
+  echo "OK: NEAR rejected it: Transaction requires a full permission access key."
+else cat "$LOG"; echo "UNEXPECTED: transfer not rejected" >&2; exit 1; fi
 
 echo "== check 2: function-call key tries owner method pause() (must FAIL)"
-if near contract call-function as-transaction "$CONTRACT" pause json-args '{}' prepaid-gas '30.0 Tgas' \
-     attached-deposit '0 NEAR' sign-as "$AGENT" network-config testnet \
-     sign-with-access-key-file "$FC" send 2>&1 | tee /tmp/leash-check2.log | tail -3; then :; fi
-if grep -qiE "error|fail|not allowed|permission" /tmp/leash-check2.log; then echo "OK: pause rejected"; else echo "UNEXPECTED: pause not rejected" >&2; exit 1; fi
+near contract call-function as-transaction "$CONTRACT" pause json-args '{}' prepaid-gas '30.0 Tgas' \
+  attached-deposit '0 NEAR' sign-as "$AGENT" network-config testnet \
+  sign-with-access-key-file "$FC" send >"$LOG" 2>&1 || true
+if grep -q "isn't allowed by the access key" "$LOG"; then
+  echo "OK: NEAR rejected it: Transaction method name <pause> isn't allowed by the access key."
+else cat "$LOG"; echo "UNEXPECTED: pause not rejected" >&2; exit 1; fi
+rm -f "$LOG"
