@@ -8,13 +8,23 @@ Deadline: repository public and submission sent before 2026-11-14T23:59Z (Nov 15
 - Policy engine (`engine/`): prompt-injection and scam heuristics, intent digest. 12 vitest tests.
 - README, threat model, MIT license.
 
+## Done (Nov 2)
+
+- `cargo-near` 0.22 and `near-cli-rs` 0.30 installed. `cargo near build reproducible-wasm` works (pinned `sourcescan/cargo-near:0.22.0-rust-1.99.1` image, toolchain pinned to 1.99.1). Contract reports its source commit via NEP-330 `contract_source_metadata`.
+- `scripts/`: faucet-funded testnet accounts (owner, contract, agent, merchant), reproducible deploy with `new(...)`, function-call agent key limited to `request_spend` with two negative checks (plain transfer and `pause()` both rejected by NEAR). Testnet only, keys outside the repo.
+- Live on testnet: `leash-11020911.testnet` (see `docs/DEPLOYMENTS.md`).
+- `demo/`: gullible agent reads a poisoned coffee shop page, engine scores each intent, every intent goes to the contract anyway. On testnet: latte `Allowed`, drain of 8.36 NEAR to `attacker-vault.testnet` `Blocked`/`MerchantNotAllowlisted`. Offline simulator for keyless runs, `npm run show` reads the on-chain log. 9 vitest tests.
+- README "do X, see Y" steps 1 to 9.
+
 ## Remaining
 
 | Day | Work | Done when |
 | --- | --- | --- |
-| Nov 2 | Install `cargo-near` and `near-cli-rs`. Reproducible build. Add pending-spend expiry and transfer callback (mark `TransferFailed`). Tests. | `cargo near build` passes, new tests green |
-| Nov 3 | Testnet deploy script (`scripts/deploy-testnet.sh`) using env vars only. Script that adds a function-call key for the agent limited to `request_spend`. Human creates the testnet accounts. | Contract live on testnet, agent key can only call `request_spend` (verified by a failing transfer attempt) |
-| Nov 4 | Demo agent (`agent/`): small TS agent with a "buy coffee" tool that calls `request_spend`. Poisoned test page served locally. | Attack recorded on testnet: `Blocked` with reason in `get_spends` |
+| ~~Nov 2~~ | ~~cargo-near, near-cli-rs, reproducible build~~ | done Nov 2 |
+| ~~Nov 3~~ | ~~Testnet deploy scripts, function-call agent key~~ | done Nov 2 (accounts via faucet, no human needed) |
+| ~~Nov 4~~ | ~~Demo agent and poisoned page~~ | done Nov 2 (`demo/`) |
+| Nov 3 | Contract: pending-spend expiry and transfer callback (mark `TransferFailed`, release budget). Tests. Redeploy to testnet (state migration or fresh account). Record a `PerTxCap` attack (injection names the real merchant) and a co-sign on testnet. | New tests green, new txs in `docs/DEPLOYMENTS.md` |
+| Nov 4 | Start NEAR AI Cloud research early (docs.near.ai, cloud.near.ai): TEE deployment, attestation format, signing key. Package engine as an HTTP service with a dev signing key. | Engine container returns signed verdict |
 | Nov 5 | Read NEAR AI Cloud docs (docs.near.ai, cloud.near.ai) for TEE deployment and attestation format. Package engine as an HTTP service. | Engine runs locally in a container, returns signed verdict with a dev key |
 | Nov 6 | Deploy engine to NEAR AI Cloud TEE. Fetch and verify attestation report. | Live attested endpoint |
 | Nov 7 | Contract: `set_engine_key`, `request_spend_attested(intent, verdict, signature)`; reject if signature invalid or score above `max_risk`. Tests. | Contract rejects unattested or high-risk spends |

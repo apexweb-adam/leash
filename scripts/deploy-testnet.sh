@@ -9,7 +9,7 @@
 #   cosign_threshold  0.2 NEAR   (spends >= 0.2 NEAR wait for the owner)
 #   velocity          5 spends per 60 s
 #
-# Usage: scripts/deploy-testnet.sh            (reproducible build, needs Docker)
+# Usage: scripts/deploy-testnet.sh            (reproducible build if Docker + clean tree)
 #        LEASH_WASM=path.wasm scripts/deploy-testnet.sh   (use a prebuilt wasm)
 source "$(dirname "$0")/common.sh"
 
@@ -19,13 +19,18 @@ OWNER="$(acct owner)"; CONTRACT="$(acct contract)"; AGENT="$(acct agent)"; MERCH
 WASM="${LEASH_WASM:-}"
 if [ -z "$WASM" ]; then
   need cargo
-  (cd "$REPO_ROOT/contract" && cargo near build reproducible-wasm)
+  if [ -z "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ] && command -v docker >/dev/null; then
+    (cd "$REPO_ROOT/contract" && cargo near build reproducible-wasm)
+  else
+    # reproducible-wasm needs Docker and a clean git tree (it embeds the commit).
+    echo "note: dirty git tree or no Docker, using cargo near build non-reproducible-wasm" >&2
+    (cd "$REPO_ROOT/contract" && cargo near build non-reproducible-wasm)
+  fi
   WASM="$REPO_ROOT/contract/target/near/leash_policy.wasm"
 fi
 sha="$(sha256sum "$WASM" | cut -d' ' -f1)"
 echo "deploying $WASM (sha256 $sha) to $CONTRACT"
 
-NEAR=1000000000000000000000000
 ARGS=$(node -e '
 const [owner, agent, merchant] = process.argv.slice(1);
 const N = 10n ** 24n;
