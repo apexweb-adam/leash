@@ -1,0 +1,23 @@
+{
+  "name": "leash-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Leash demo: a gullible AI agent reads a poisoned page and tries to drain its budget. The NEAR contract says no.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "demo": "tsx src/run.ts",
+    "show": "tsx src/show.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "near-api-js": "^7.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}
