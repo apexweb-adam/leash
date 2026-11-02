@@ -132,6 +132,13 @@ Example `SpendResult`:
 
 Out of scope today, planned: engine verdict is advisory until it runs in a TEE and the contract verifies its attestation; pending spends do not expire yet; transfer failure callbacks are not handled yet (a failed transfer refunds the contract, but the log still says `Allowed`).
 
+## Security checks (run before every push)
+
+- `gitleaks git . --redact` (full history) and `gitleaks dir . --redact`: no leaks.
+- `npm audit` in `engine/` and `demo/`: 0 vulnerabilities.
+- `cd contract && cargo audit`: 4 advisories (`crypto-bigint` 0.5.5, `zstd` 0.13.3, `zstd-safe` 7.3.0), all reached only through `near-sdk`'s `unit-testing` dev-dependency (`near-vm-runner`, `near-primitives`). `cargo tree -i zstd -e normal --target wasm32-unknown-unknown` prints nothing: none of them is in the deployed wasm.
+- Private keys: scripts refuse to write keys inside the repo, `.gitignore` covers key files, `deployments/testnet.json` holds only public account ids.
+
 ## Roadmap (Nov 1 to Nov 14)
 
 See `docs/PLAN.md`. Summary:
