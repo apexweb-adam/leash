@@ -6,3 +6,12 @@ node_modules/
 *.key
 neardev/
 submission*.json
+# NEAR keys never live in the repo (scripts write them to $LEASH_SECRETS_DIR)
+secrets/
+.near-credentials/
+.near/
+*.fc.json
+*.keypair.json
+*-key.json
+*.seed
+*.secret

@@ -1,0 +1,7 @@
+{
+  "network": "testnet",
+  "owner": "leash-owner-11020911.testnet",
+  "contract": "leash-11020911.testnet",
+  "agent": "leash-agent-11020911.testnet",
+  "merchant": "leash-coffee-11020911.testnet"
+}
