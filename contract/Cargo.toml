@@ -4,6 +4,15 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "Leash: on-chain spending firewall for AI agents on NEAR"
+repository = "https://github.com/apexweb-adam/leash"
+
+# Reproducible build (NEP-330): `cargo near build reproducible-wasm` runs this
+# pinned image, so anyone can rebuild the exact wasm and compare its hash.
+[package.metadata.near.reproducible_build]
+image = "sourcescan/cargo-near:0.22.0-rust-1.99.1"
+image_digest = "sha256:c9655eaf7436b90c87ea8b25739f91063032c5c30ba24cfeafe72c142943b5bb"
+passed_env = []
+container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
