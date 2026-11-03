@@ -37,4 +37,15 @@ All four accounts were created with the public testnet faucet (`near account cre
 | Demo: agent buys a 0.05 NEAR latte | `Allowed` / `WithinPolicy`, 0.05 NEAR sent to the merchant | [7CJrjBU1...](https://testnet.nearblocks.io/txns/7CJrjBU1VdjWFo5rRMzmCpUsB44fzy6PMds6EXNNbzxS) |
 | Demo: poisoned page makes the agent send the whole budget (8.3579 NEAR) to `attacker-vault.testnet` | `Blocked` / `MerchantNotAllowlisted`, nothing moved, attempt stored in the spend log | [C31sZXh5...](https://testnet.nearblocks.io/txns/C31sZXh5TdsmgbXP4TutP6KrsPedtbZWLGhgGrBeMGPq) |
 
+| Upgrade (2026-11-03): redeploy code without re-init, state and spend log kept (layout unchanged, two enum variants appended) | ok | [HyNqcBEt...](https://testnet.nearblocks.io/txns/HyNqcBEtxN8bdP8CUzBXNmNUvVf73KXddVC9B8vPJik8) |
+| Attack: poisoned receipt names the REAL merchant but inflates the total to 0.6 NEAR | `Blocked` / `PerTxCap`, nothing moved, attempt stored in the spend log (id 2) | [6NJ68Rih...](https://testnet.nearblocks.io/txns/6NJ68RihUd9NM1CVeeS8B77JVHgwNijrwPs1RtVrxim6) |
+| Agent asks for 0.3 NEAR of coffee beans (over the 0.2 NEAR co-sign threshold) | `PendingCosign` / `CosignThreshold`, budget reserved, nothing moved yet (id 3) | [Hh3vkBBY...](https://testnet.nearblocks.io/txns/Hh3vkBBYTPzSqMWqLSoDWV4rGZp3ApHYHJuhjHW2BYup) |
+| Owner co-signs id 3 | `Approved`, 0.3 NEAR sent to the merchant, `on_transfer` callback confirmed it | [CCkg7j9X...](https://testnet.nearblocks.io/txns/CCkg7j9X6FLQKpf3LHEMZh2xMHaE3sHKJ4BbEUENUr4y) |
+
+### Upgrade, 2026-11-03
+
+- Adds a 24 h TTL on pending co-sign requests (`expire_pending(id)`, callable by anyone after the TTL, releases the reservation) and a transfer callback (`on_transfer`, private) that marks a failed payout `TransferFailed` and gives the daily budget back.
+- Reproducible build, same pinned image. Source snapshot (NEP-330): commit [`08db527`](https://github.com/apexweb-adam/leash/tree/08db5277c0c0492d22c21da33b5b2d34e0a4b350).
+- Deployed wasm sha256: `91114f1a397fb83735e041667a5bad707e51d4eef693441116a48f56a2dd9146` (the 2026-11-02 build above is superseded).
+
 Read the log yourself (no key needed): `cd demo && npm ci && npm run show`.

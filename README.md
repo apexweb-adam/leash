@@ -130,7 +130,9 @@ Example `SpendResult`:
 | Emergency | `pause()` blocks all agent spends immediately | contract |
 | Unbounded state growth | Memo capped at 256 bytes, velocity buffer capped at 64 entries, paginated views | contract |
 
-Out of scope today, planned: engine verdict is advisory until it runs in a TEE and the contract verifies its attestation; pending spends do not expire yet; transfer failure callbacks are not handled yet (a failed transfer refunds the contract, but the log still says `Allowed`).
+Out of scope today, planned: engine verdict is advisory until it runs in a TEE and the contract verifies its attestation.
+
+Handled since Nov 3: pending co-sign requests expire after 24 h (anyone can call `expire_pending`); a failed payout is caught by the `on_transfer` callback, logged as `TransferFailed`, and its amount goes back into the daily budget.
 
 ## Security checks (run before every push)
 
