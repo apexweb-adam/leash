@@ -11,6 +11,8 @@
 #
 # Usage: scripts/deploy-testnet.sh            (reproducible build if Docker + clean tree)
 #        LEASH_WASM=path.wasm scripts/deploy-testnet.sh   (use a prebuilt wasm)
+#        LEASH_UPGRADE=1 scripts/deploy-testnet.sh        (redeploy code, keep state and spend log;
+#                                                          only valid when the state layout is unchanged)
 source "$(dirname "$0")/common.sh"
 
 OWNER="$(acct owner)"; CONTRACT="$(acct contract)"; AGENT="$(acct agent)"; MERCHANT="$(acct merchant)"
@@ -40,9 +42,14 @@ console.log(JSON.stringify({ owner, agent, config: {
   cosign_threshold: near(0.2), velocity_max_tx: 5, velocity_window_sec: 60 } }));
 ' "$OWNER" "$AGENT" "$MERCHANT")
 
-near contract deploy "$CONTRACT" use-file "$WASM" \
-  with-init-call new json-args "$ARGS" prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
-  network-config testnet $(sign "$CONTRACT") send
+if [ -n "${LEASH_UPGRADE:-}" ]; then
+  near contract deploy "$CONTRACT" use-file "$WASM" without-init-call \
+    network-config testnet $(sign "$CONTRACT") send
+else
+  near contract deploy "$CONTRACT" use-file "$WASM" \
+    with-init-call new json-args "$ARGS" prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
+    network-config testnet $(sign "$CONTRACT") send
+fi
 
 node -e '
 const fs=require("fs");const [f,sha]=process.argv.slice(1);

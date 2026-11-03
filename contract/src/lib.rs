@@ -9,12 +9,18 @@ pub mod policy;
 
 use near_sdk::json_types::U128;
 use near_sdk::store::Vector;
-use near_sdk::{env, near, require, AccountId, NearToken, PanicOnDefault, Promise};
+use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseError};
 use policy::{evaluate, PolicyConfig, Rule, Usage, Verdict};
 
 const SECS_PER_DAY: u64 = 86_400;
 /// Cap on stored velocity timestamps, so state cannot grow without bound.
 const MAX_RECENT: usize = 64;
+/// A spend waiting for a human co-sign expires after this many seconds.
+/// After that anyone may call `expire_pending` to release the reserved budget,
+/// and the owner can no longer co-sign it.
+pub const PENDING_TTL_SEC: u64 = 86_400;
+/// Gas reserved for the transfer callback.
+const CALLBACK_GAS: Gas = Gas::from_tgas(10);
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug, PartialEq)]
@@ -24,6 +30,11 @@ pub enum SpendStatus {
     Blocked,
     Approved,
     Rejected,
+    /// Pending co-sign was not answered within `PENDING_TTL_SEC`.
+    Expired,
+    /// Policy allowed the spend but the NEAR transfer failed (for example the
+    /// merchant account does not exist). The budget is released again.
+    TransferFailed,
 }
 
 #[near(serializers = [json, borsh])]
@@ -110,12 +121,13 @@ impl Leash {
             available_budget: self.available_budget(),
         };
         let d = evaluate(&self.config, &usage, merchant.as_str(), amount.0, &memo, now);
+        let id = self.log.len() as u64;
 
         let status = match d.verdict {
             Verdict::Allowed => {
                 self.spent_today += amount.0;
                 self.push_recent(now);
-                let _ = Promise::new(merchant.clone()).transfer(NearToken::from_yoctonear(amount.0));
+                self.pay(id, merchant.clone(), amount.0);
                 SpendStatus::Allowed
             }
             Verdict::PendingCosign => {
@@ -128,7 +140,6 @@ impl Leash {
         };
         // Truncate stored memo for blocked requests too; never store unbounded input.
         let memo: String = memo.chars().take(policy::MAX_MEMO_LEN).collect();
-        let id = self.log.len() as u64;
         let rec = SpendRecord {
             id,
             merchant,
@@ -150,8 +161,10 @@ impl Leash {
     /// Human co-sign for a pending spend. Executes the transfer.
     pub fn cosign(&mut self, id: u64) -> SpendResult {
         self.assert_owner();
+        let now = now_sec();
         let rec = self.log.get_mut(id as u32).unwrap_or_else(|| env::panic_str("unknown spend id"));
         require!(rec.status == SpendStatus::PendingCosign, "spend is not pending");
+        require!(now < rec.timestamp_sec + PENDING_TTL_SEC, "spend expired, ask the agent to request it again");
         rec.status = SpendStatus::Approved;
         rec.reason = "co-signed by owner".into();
         let (merchant, amount) = (rec.merchant.clone(), rec.amount.0);
@@ -159,7 +172,7 @@ impl Leash {
         let snapshot = rec.clone();
         self.reserved_pending -= amount;
         emit("cosign", &snapshot);
-        let _ = Promise::new(merchant).transfer(NearToken::from_yoctonear(amount));
+        self.pay(id, merchant, amount);
         out
     }
 
@@ -175,11 +188,52 @@ impl Leash {
         let out = SpendResult { id, status: SpendStatus::Rejected, rule: rec.rule, reason: rec.reason.clone() };
         let snapshot = rec.clone();
         self.reserved_pending -= amount;
-        if day == day_now && self.day_index == day_now {
-            self.spent_today = self.spent_today.saturating_sub(amount);
-        }
+        self.release_daily(amount, day, day_now);
         emit("reject", &snapshot);
         out
+    }
+
+    // ---------- anyone ----------
+
+    /// Release the budget held by a pending spend nobody co-signed in time.
+    /// Callable by anyone (a keeper, the dashboard, the agent) once the TTL
+    /// has passed, so a forgotten request cannot block the budget forever.
+    pub fn expire_pending(&mut self, id: u64) -> SpendResult {
+        let now = now_sec();
+        let day_now = now / SECS_PER_DAY;
+        let rec = self.log.get_mut(id as u32).unwrap_or_else(|| env::panic_str("unknown spend id"));
+        require!(rec.status == SpendStatus::PendingCosign, "spend is not pending");
+        require!(now >= rec.timestamp_sec + PENDING_TTL_SEC, "spend has not expired yet");
+        rec.status = SpendStatus::Expired;
+        rec.reason = format!("no co-sign within {PENDING_TTL_SEC} s");
+        let (amount, day) = (rec.amount.0, rec.day);
+        let out = SpendResult { id, status: SpendStatus::Expired, rule: rec.rule, reason: rec.reason.clone() };
+        let snapshot = rec.clone();
+        self.reserved_pending -= amount;
+        self.release_daily(amount, day, day_now);
+        emit("expire", &snapshot);
+        out
+    }
+
+    // ---------- callbacks ----------
+
+    /// Result of the NEAR transfer started by `request_spend` or `cosign`.
+    /// On failure the record becomes `TransferFailed` and the daily budget is
+    /// released, so the log never claims money moved when it did not.
+    #[private]
+    pub fn on_transfer(&mut self, id: u64, #[callback_result] result: Result<(), PromiseError>) -> bool {
+        if result.is_ok() {
+            return true;
+        }
+        let day_now = now_sec() / SECS_PER_DAY;
+        let Some(rec) = self.log.get_mut(id as u32) else { return false };
+        rec.status = SpendStatus::TransferFailed;
+        rec.reason = "transfer to merchant failed, funds stayed in the contract".into();
+        let (amount, day) = (rec.amount.0, rec.day);
+        let snapshot = rec.clone();
+        self.release_daily(amount, day, day_now);
+        emit("transfer_failed", &snapshot);
+        false
     }
 
     pub fn set_policy(&mut self, config: PolicyConfig) {
@@ -237,6 +291,21 @@ impl Leash {
     }
 
     // ---------- internal ----------
+
+    /// Transfer to the merchant and check the outcome in `on_transfer`.
+    fn pay(&self, id: u64, merchant: AccountId, amount: u128) {
+        let _ = Promise::new(merchant)
+            .transfer(NearToken::from_yoctonear(amount))
+            .then(Self::ext(env::current_account_id()).with_static_gas(CALLBACK_GAS).on_transfer(id));
+    }
+
+    /// Give back daily budget for a spend that never went out, but only if it
+    /// was counted in the current day (yesterday's counter is already reset).
+    fn release_daily(&mut self, amount: u128, day: u64, day_now: u64) {
+        if day == day_now && self.day_index == day_now {
+            self.spent_today = self.spent_today.saturating_sub(amount);
+        }
+    }
 
     fn assert_owner(&self) {
         require!(env::predecessor_account_id() == self.owner, "only the owner");
