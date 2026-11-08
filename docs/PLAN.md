@@ -30,6 +30,7 @@ Deadline: repository public and submission sent before 2026-11-14T23:59Z (Nov 15
 | Nov 7 | Contract: `set_engine_key`, `request_spend_attested(intent, verdict, signature)`; reject if signature invalid or score above `max_risk`. Tests. | Contract rejects unattested or high-risk spends |
 | Nov 8 | NEAR Intents: read docs.near-intents.org, 1Click API. Allowed spend for a cross-chain merchant produces an Intents quote (`dry: true`). | Quote flow works end to end in tests |
 | Nov 9 | Intents execution with tiny amounts on a separate dev account, only after Adam approves spend. Otherwise keep `dry: true` and document. | One real or dry cross-chain settlement shown |
+| ~~Nov 10~~ | ~~Dashboard read-only slice~~ | done Nov 8: `dashboard/` reads live testnet log, 5 tests. Co-sign and pause buttons via wallet selector still open. |
 | Nov 10 | Dashboard (`dashboard/`): reads `get_spends` and events, shows allowed/pending/blocked with reason, co-sign and pause buttons via wallet selector. | Dashboard shows the attack and a co-sign |
 | Nov 11 | Host dashboard (Vercel), keep up to Nov 25. README "do X, see Y" for hosted demo. | Public URL works for judges |
 | Nov 12 | Hardening: fuzz `evaluate`, more engine cases (multilingual injection, Hungarian included), gas profile. | All tests green |

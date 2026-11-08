@@ -39,7 +39,7 @@ Leash gives the agent money without giving it the keys.
    to merchant cosign/reject   with reason
                   │
                   ▼
-     spend log (get_spends) + EVENT_JSON  ──► dashboard (roadmap)
+     spend log (get_spends) + EVENT_JSON  ──► dashboard/ (live, read-only)
      roadmap: settlement cross-chain via NEAR Intents
 ```
 
@@ -54,6 +54,7 @@ Leash gives the agent money without giving it the keys.
 | `engine/test/engine.test.ts` | vitest suite including the poisoned-page attack. |
 | `demo/` | Demo agent: poisoned page fixture, gullible agent, offline simulator, testnet client (`near-api-js`), `npm run demo`, `npm run show`. 9 vitest tests. |
 | `scripts/` | Testnet only: faucet accounts, reproducible deploy, function-call agent key with negative checks, key generator. |
+| `dashboard/` | Read-only static dashboard: live status, policy and full spend log (allowed, pending, blocked with rule and reason) from public RPC. No wallet, no keys, strict CSP, untrusted memo text rendered with `textContent`. `node --test dashboard/leash.test.mjs` (5 tests). |
 | `deployments/testnet.json` | Public account ids and wasm hash of the live testnet deployment. No secrets. |
 | `docs/DEPLOYMENTS.md` | Testnet accounts and transaction links. |
 | `docs/PLAN.md` | Remaining build plan to Nov 14. |
@@ -157,3 +158,8 @@ See `docs/PLAN.md`. Summary:
 ## License
 
 MIT, see `LICENSE`.
+
+## Dashboard
+
+Do: `cd dashboard && python3 -m http.server 8080`, open `http://localhost:8080/?network=testnet&contract=leash-11020911.testnet`.
+See: the testnet spend log with the 0.05 NEAR latte `Allowed`, the 8.36 NEAR drain `Blocked`/`MerchantNotAllowlisted`, the 0.6 NEAR inflated receipt `Blocked`/`PerTxCap`, and the 0.3 NEAR spend `Approved` after owner co-sign. Filter buttons narrow by status; the value-blocked card sums every blocked attempt.

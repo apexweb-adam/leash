@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leash dashboard: AI agent spend log on NEAR</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://rpc.testnet.near.org https://rpc.mainnet.near.org https://test.rpc.fastnear.com; img-src 'self' data:">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Leash</h1>
+  <p class="sub">A spending firewall for AI agents. Every spend the agent tried, allowed or blocked, read live from the contract.</p>
+  <form id="cfg">
+    <label>Network <select id="network"><option>testnet</option><option>mainnet</option></select></label>
+    <label>Contract <input id="contract" value="leash-11020911.testnet" spellcheck="false"></label>
+    <button type="submit">Load</button>
+  </form>
+</header>
+<main>
+  <section id="status" class="cards" aria-live="polite"></section>
+  <section>
+    <h2>Policy</h2>
+    <div id="policy" class="cards"></div>
+  </section>
+  <section>
+    <h2>Spend log <span id="count"></span></h2>
+    <div class="filters" id="filters"></div>
+    <table>
+      <thead><tr><th>#</th><th>Time (local)</th><th>Merchant</th><th>Amount</th><th>Status</th><th>Rule</th><th>Reason</th><th>Memo</th></tr></thead>
+      <tbody id="log"></tbody>
+    </table>
+  </section>
+  <p id="err" class="err" role="alert"></p>
+</main>
+<footer>Read-only. No wallet, no keys. Data comes from the contract view methods <code>get_status</code>, <code>get_policy</code> and <code>get_spends</code> over public NEAR RPC.</footer>
+<script src="leash.js" type="module"></script>
+<script src="app.js" type="module"></script>
+</body>
+</html>
