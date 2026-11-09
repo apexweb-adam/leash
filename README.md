@@ -109,13 +109,14 @@ No key and no account needed for steps 1 to 6.
 7. **Reproducible build.** `cd contract && cargo near build reproducible-wasm`
    See: `Contract successfully built!` and `target/near/leash_policy.wasm`. The deployed contract reports its source commit: `near contract call-function as-read-only leash-11020911.testnet contract_source_metadata json-args {} network-config testnet now` returns `"source_code_snapshot":"git+https://github.com/apexweb-adam/leash?rev=4477303..."`. Quick non-docker build: `cargo near build non-reproducible-wasm`.
 8. **Check the agent key is leashed.** `near account list-keys leash-agent-11020911.testnet network-config testnet now`
-   See: a key with `only do ["request_spend"] function calls on leash-11020911.testnet with an allowance of 0.25 NEAR`.
+   See: exactly two keys, both function-call keys: `only do ["request_spend", "request_spend_attested"] function calls on leash-11020911.testnet` and `only do ["request_spend"] function calls on leash-11020911.testnet`, each with a gas allowance under 0.25 NEAR. No full-access key: the faucet-created one was deleted on Nov 9 by `scripts/lock-agent.sh` ([tx](https://testnet.nearblocks.io/txns/3yeaCtRYp14VD1bMYCcrZrBM8RvXrHFxyaDXo9nobko6)), so nobody, including us, can move the agent account's funds or add keys to it.
 9. **Deploy your own copy on testnet (fully autonomous, faucet funded).**
    ```bash
    export LEASH_SECRETS_DIR=$HOME/.leash-secrets/testnet   # must be outside the repo
    LEASH_SUFFIX=$RANDOM$RANDOM scripts/create-testnet-accounts.sh
    scripts/deploy-testnet.sh                                  # reproducible build + deploy + new()
    scripts/add-agent-key.sh                                   # function-call key + 2 negative checks
+   scripts/lock-agent.sh                                      # delete the agent's own full-access key (irreversible)
    cd demo && LEASH_AGENT_KEY_FILE=$LEASH_SECRETS_DIR/$(node -p 'require("../deployments/testnet.json").agent').fc.json npm run demo
    ```
    See: `create-testnet-accounts.sh` prints `New account <...> created successfully.` four times; `deploy-testnet.sh` ends with a `get_status` JSON; `add-agent-key.sh` ends with `OK: NEAR rejected it: Transaction requires a full permission access key.` and `OK: NEAR rejected it: Transaction method name <pause> isn't allowed by the access key.`; the demo prints `Allowed` for the latte and `Blocked (rule MerchantNotAllowlisted)` for the drain, each with a `https://testnet.nearblocks.io/txns/...` link. The scripts refuse any network except testnet and refuse to write keys inside the repo. They rewrite `deployments/testnet.json` with your accounts (`git checkout deployments/testnet.json` restores ours). With a dirty tree or no Docker the deploy falls back to `cargo near build non-reproducible-wasm`.
