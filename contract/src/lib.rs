@@ -5,12 +5,14 @@
 //! move funds itself. Every request is evaluated by `policy::evaluate` and
 //! written to an append-only spend log with a machine-readable reason.
 
+pub mod attest;
 pub mod policy;
 
 use near_sdk::json_types::U128;
 use near_sdk::store::Vector;
 use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseError};
-use policy::{evaluate, PolicyConfig, Rule, Usage, Verdict};
+use attest::{Attestation, EngineConfig};
+use policy::{evaluate, Decision, PolicyConfig, Rule, Usage, Verdict};
 
 const SECS_PER_DAY: u64 = 86_400;
 /// Cap on stored velocity timestamps, so state cannot grow without bound.
@@ -110,6 +112,66 @@ impl Leash {
     /// so the owner can see what the agent tried to do and why it failed.
     pub fn request_spend(&mut self, merchant: AccountId, amount: U128, memo: String) -> SpendResult {
         require!(env::predecessor_account_id() == self.agent, "only the agent can request spends");
+        let pre = match attest::load() {
+            Some(c) if c.required && !self.paused => Some(Decision {
+                verdict: Verdict::Blocked,
+                rule: Rule::AttestationRequired,
+                reason: "owner requires a signed engine verdict, use request_spend_attested".into(),
+            }),
+            _ => None,
+        };
+        self.spend(merchant, amount, memo, pre)
+    }
+
+    /// Same as `request_spend`, plus a verdict signed by the policy engine.
+    /// The signature binds this contract, merchant, amount, memo hash, score,
+    /// time and nonce, so a verdict for a latte cannot be reused for a drain.
+    pub fn request_spend_attested(&mut self, merchant: AccountId, amount: U128, memo: String, attestation: Attestation) -> SpendResult {
+        require!(env::predecessor_account_id() == self.agent, "only the agent can request spends");
+        let pre = if self.paused {
+            None
+        } else {
+            match attest::load() {
+                None => Some(Decision { verdict: Verdict::Blocked, rule: Rule::NoEngineKey, reason: "no engine key registered".into() }),
+                Some(mut c) => {
+                    let me = env::current_account_id();
+                    match attest::check(&c, me.as_str(), merchant.as_str(), amount.0, &memo, &attestation, now_sec()) {
+                        Ok(()) => {
+                            c.last_nonce = attestation.nonce;
+                            attest::save(&c);
+                            None
+                        }
+                        Err((rule, reason)) => Some(Decision { verdict: Verdict::Blocked, rule, reason }),
+                    }
+                }
+            }
+        };
+        self.spend(merchant, amount, memo, pre)
+    }
+
+    // ---------- owner: engine ----------
+
+    /// Register the policy engine key. `max_risk` is the highest engine score
+    /// that may still spend; `required` makes every spend need a verdict.
+    pub fn set_engine(&mut self, engine_pk: near_sdk::PublicKey, max_risk: u32, max_age_sec: u64, required: bool) {
+        self.assert_owner();
+        require!(attest::ed25519_bytes(&engine_pk).is_some(), "engine key must be ed25519");
+        require!(max_risk <= 100, "max_risk is 0..=100");
+        require!(max_age_sec >= 30 && max_age_sec <= 3_600, "max_age_sec is 30..=3600");
+        let last_nonce = attest::load().map(|c| c.last_nonce).unwrap_or(0);
+        attest::save(&EngineConfig { engine_pk, max_risk, max_age_sec, required, last_nonce });
+    }
+
+    pub fn clear_engine(&mut self) {
+        self.assert_owner();
+        attest::clear();
+    }
+
+    pub fn get_engine(&self) -> Option<EngineConfig> {
+        attest::load()
+    }
+
+    fn spend(&mut self, merchant: AccountId, amount: U128, memo: String, pre: Option<Decision>) -> SpendResult {
         let now = now_sec();
         self.roll_day(now);
         self.prune_recent(now);
@@ -120,7 +182,7 @@ impl Leash {
             recent_spend_secs: self.recent.clone(),
             available_budget: self.available_budget(),
         };
-        let d = evaluate(&self.config, &usage, merchant.as_str(), amount.0, &memo, now);
+        let d = pre.unwrap_or_else(|| evaluate(&self.config, &usage, merchant.as_str(), amount.0, &memo, now));
         let id = self.log.len() as u64;
 
         let status = match d.verdict {

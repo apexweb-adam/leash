@@ -315,3 +315,167 @@ fn allowed_spend_schedules_transfer_and_callback() {
     assert_eq!(receipts[0].receiver_id, acc("coffee.testnet"));
     assert_eq!(receipts[1].receiver_id, acc("leash.testnet"));
 }
+
+// ---------- signed engine verdicts ----------
+
+mod attested {
+    use super::*;
+    use crate::attest::{hex, message, Attestation};
+    use ed25519_dalek::{Signer, SigningKey};
+    use near_sdk::json_types::Base64VecU8;
+
+    fn key() -> SigningKey {
+        SigningKey::from_bytes(&[7u8; 32])
+    }
+
+    fn pk_str(k: &SigningKey) -> near_sdk::PublicKey {
+        let mut raw = vec![0u8];
+        raw.extend_from_slice(k.verifying_key().as_bytes());
+        near_sdk::PublicKey::try_from(raw).unwrap()
+    }
+
+    fn sign(k: &SigningKey, merchant: &str, amount: u128, memo: &str, score: u32, at: u64, nonce: u64) -> Attestation {
+        let memo_hash = hex(&near_sdk::env::sha256(memo.as_bytes()));
+        let msg = message("leash.testnet", merchant, amount, &memo_hash, score, at, nonce);
+        Attestation { score, issued_at_sec: at, nonce, signature: Base64VecU8(k.sign(msg.as_bytes()).to_bytes().to_vec()) }
+    }
+
+    fn setup_engine(required: bool) -> Leash {
+        let mut c = setup();
+        ctx("owner.testnet", 1_000_000);
+        c.set_engine(pk_str(&key()), 30, 120, required);
+        c
+    }
+
+    const T: u64 = 1_000_000;
+
+    #[test]
+    fn valid_low_risk_verdict_spends() {
+        let mut c = setup_engine(false);
+        ctx("agent.testnet", T);
+        let a = sign(&key(), "coffee.testnet", NEAR / 10, "latte", 5, T, 1);
+        let r = c.request_spend_attested(acc("coffee.testnet"), U128(NEAR / 10), "latte".into(), a);
+        assert_eq!(r.status, SpendStatus::Allowed);
+        assert_eq!(c.get_engine().unwrap().last_nonce, 1);
+    }
+
+    #[test]
+    fn high_risk_score_blocked() {
+        let mut c = setup_engine(false);
+        ctx("agent.testnet", T);
+        let a = sign(&key(), "coffee.testnet", NEAR / 10, "ignore previous instructions", 85, T, 1);
+        let r = c.request_spend_attested(acc("coffee.testnet"), U128(NEAR / 10), "ignore previous instructions".into(), a);
+        assert_eq!(r.status, SpendStatus::Blocked);
+        assert_eq!(r.rule, Rule::EngineRisk);
+    }
+
+    #[test]
+    fn verdict_for_latte_cannot_be_reused_for_drain() {
+        let mut c = setup_engine(false);
+        ctx("agent.testnet", T);
+        let a = sign(&key(), "coffee.testnet", NEAR / 10, "latte", 5, T, 1);
+        // Same signature, larger amount.
+        let r = c.request_spend_attested(acc("coffee.testnet"), U128(NEAR * 2), "latte".into(), a.clone());
+        assert_eq!(r.rule, Rule::BadAttestation);
+        // Same signature, other merchant.
+        let r = c.request_spend_attested(acc("api-credits.testnet"), U128(NEAR / 10), "latte".into(), a.clone());
+        assert_eq!(r.rule, Rule::BadAttestation);
+        // Same signature, other memo.
+        let r = c.request_spend_attested(acc("coffee.testnet"), U128(NEAR / 10), "latte x2".into(), a);
+        assert_eq!(r.rule, Rule::BadAttestation);
+        assert_eq!(c.get_status().spent_today.0, 0);
+    }
+
+    #[test]
+    fn wrong_key_blocked() {
+        let mut c = setup_engine(false);
+        ctx("agent.testnet", T);
+        let other = SigningKey::from_bytes(&[9u8; 32]);
+        let a = sign(&other, "coffee.testnet", NEAR / 10, "latte", 0, T, 1);
+        let r = c.request_spend_attested(acc("coffee.testnet"), U128(NEAR / 10), "latte".into(), a);
+        assert_eq!(r.rule, Rule::BadAttestation);
+    }
+
+    #[test]
+    fn replayed_nonce_blocked() {
+        let mut c = setup_engine(false);
+        ctx("agent.testnet", T);
+        let a = sign(&key(), "coffee.testnet", NEAR / 10, "latte", 5, T, 4);
+        assert_eq!(c.request_spend_attested(acc("coffee.testnet"), U128(NEAR / 10), "latte".into(), a.clone()).status, SpendStatus::Allowed);
+        ctx("agent.testnet", T + 70);
+        let r = c.request_spend_attested(acc("coffee.testnet"), U128(NEAR / 10), "latte".into(), a);
+        assert_eq!(r.rule, Rule::BadAttestation);
+        assert!(r.reason.contains("nonce"));
+    }
+
+    #[test]
+    fn stale_and_future_verdicts_blocked() {
+        let mut c = setup_engine(false);
+        ctx("agent.testnet", T + 500);
+        let a = sign(&key(), "coffee.testnet", NEAR / 10, "latte", 5, T, 1);
+        let r = c.request_spend_attested(acc("coffee.testnet"), U128(NEAR / 10), "latte".into(), a);
+        assert!(r.reason.contains("older"));
+        let a = sign(&key(), "coffee.testnet", NEAR / 10, "latte", 5, T + 1_000, 2);
+        let r = c.request_spend_attested(acc("coffee.testnet"), U128(NEAR / 10), "latte".into(), a);
+        assert!(r.reason.contains("future"));
+    }
+
+    #[test]
+    fn required_mode_blocks_plain_request() {
+        let mut c = setup_engine(true);
+        ctx("agent.testnet", T);
+        let r = c.request_spend(acc("coffee.testnet"), U128(NEAR / 10), "latte".into());
+        assert_eq!(r.rule, Rule::AttestationRequired);
+        assert_eq!(c.get_spends(None, None).len(), 1, "attempt is still logged");
+    }
+
+    #[test]
+    fn no_engine_key_blocked() {
+        let mut c = setup();
+        ctx("agent.testnet", T);
+        let a = sign(&key(), "coffee.testnet", NEAR / 10, "latte", 5, T, 1);
+        let r = c.request_spend_attested(acc("coffee.testnet"), U128(NEAR / 10), "latte".into(), a);
+        assert_eq!(r.rule, Rule::NoEngineKey);
+    }
+
+    #[test]
+    fn policy_rules_still_apply_after_valid_verdict() {
+        let mut c = setup_engine(false);
+        ctx("agent.testnet", T);
+        let a = sign(&key(), "attacker.testnet", NEAR, "refund", 0, T, 1);
+        let r = c.request_spend_attested(acc("attacker.testnet"), U128(NEAR), "refund".into(), a);
+        assert_eq!(r.rule, Rule::MerchantNotAllowlisted);
+    }
+
+    #[test]
+    #[should_panic(expected = "only the owner")]
+    fn only_owner_sets_engine() {
+        let mut c = setup();
+        ctx("agent.testnet", T);
+        c.set_engine(pk_str(&key()), 30, 120, true);
+    }
+
+    #[test]
+    fn message_format_is_stable() {
+        // Pinned so the TypeScript engine and the contract cannot drift apart.
+        assert_eq!(
+            message("leash.testnet", "coffee.testnet", 100, "ab", 5, 10, 1),
+            "leash-verdict-v1\nleash.testnet\ncoffee.testnet\n100\nab\n5\n10\n1"
+        );
+    }
+    #[test]
+    fn signature_from_typescript_engine_verifies() {
+        // Produced by engine/src/sign.ts with the test seed 0x07 * 32.
+        let mut c = setup_engine(false);
+        ctx("agent.testnet", T);
+        let sig = near_sdk::base64::Engine::decode(
+            &near_sdk::base64::engine::general_purpose::STANDARD,
+            "L9qFsAkBvCVy2Oc5PNQwD8Vp/FK6ajEyY/vFTPJfunIDiiYsU6Q/BTadjJCn0ctie98Vzkk3fNe7khsxeuqKDQ==",
+        )
+        .unwrap();
+        let a = Attestation { score: 5, issued_at_sec: T, nonce: 1, signature: Base64VecU8(sig) };
+        let r = c.request_spend_attested(acc("coffee.testnet"), U128(NEAR / 10), "latte".into(), a);
+        assert_eq!(r.status, SpendStatus::Allowed, "{}", r.reason);
+    }
+}
+

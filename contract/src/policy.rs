@@ -35,6 +35,14 @@ pub enum Rule {
     InsufficientBudget,
     CosignThreshold,
     WithinPolicy,
+    /// Engine verdicts are required and the agent called plain `request_spend`.
+    AttestationRequired,
+    /// `request_spend_attested` used but no engine key is registered.
+    NoEngineKey,
+    /// Signature invalid, stale, future-dated or replayed nonce.
+    BadAttestation,
+    /// Engine risk score above the owner's `max_risk`.
+    EngineRisk,
 }
 
 #[near(serializers = [json, borsh])]

@@ -27,7 +27,7 @@ Deadline: repository public and submission sent before 2026-11-14T23:59Z (Nov 15
 | Nov 4 | Start NEAR AI Cloud research early (docs.near.ai, cloud.near.ai): TEE deployment, attestation format, signing key. Package engine as an HTTP service with a dev signing key. | Engine container returns signed verdict |
 | Nov 5 | Read NEAR AI Cloud docs (docs.near.ai, cloud.near.ai) for TEE deployment and attestation format. Package engine as an HTTP service. | Engine runs locally in a container, returns signed verdict with a dev key |
 | Nov 6 | Deploy engine to NEAR AI Cloud TEE. Fetch and verify attestation report. | Live attested endpoint |
-| Nov 7 | Contract: `set_engine_key`, `request_spend_attested(intent, verdict, signature)`; reject if signature invalid or score above `max_risk`. Tests. | Contract rejects unattested or high-risk spends |
+| ~~Nov 7~~ | ~~Contract: `set_engine_key`, `request_spend_attested(intent, verdict, signature)`; reject if signature invalid or score above `max_risk`. Tests.~~ | done Nov 9: `set_engine`, `request_spend_attested`, ed25519 check, replay and age limits, 12 tests, engine HTTP service signs verdicts, cross-language test vector |
 | Nov 8 | NEAR Intents: read docs.near-intents.org, 1Click API. Allowed spend for a cross-chain merchant produces an Intents quote (`dry: true`). | Quote flow works end to end in tests |
 | Nov 9 | Intents execution with tiny amounts on a separate dev account, only after Adam approves spend. Otherwise keep `dry: true` and document. | One real or dry cross-chain settlement shown |
 | ~~Nov 10~~ | ~~Dashboard read-only slice~~ | done Nov 8: `dashboard/` reads live testnet log, 5 tests. Co-sign and pause buttons via wallet selector still open. |

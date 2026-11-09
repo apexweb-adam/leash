@@ -72,11 +72,11 @@ Requirements: Rust 1.99.1 (pinned in `contract/rust-toolchain.toml`) with `wasm3
 No key and no account needed for steps 1 to 6.
 
 1. **Run the contract tests.** `cd contract && cargo test`
-   See: `test result: ok. 23 passed; 0 failed`.
+   See: `test result: ok. 44 passed; 0 failed`.
 2. **See the attack get blocked by the contract logic.** `cd contract && cargo test poisoned -- --nocapture`
    See: `tests::poisoned_page_whole_balance_to_stranger_blocked_and_logged ... ok` and `policy::tests::poisoned_page_whole_balance_to_stranger_is_blocked ... ok`. 50 NEAR to `stranger.testnet` returns `Blocked` with rule `MerchantNotAllowlisted`, is stored in the log, and spends nothing. The same amount to an allowlisted merchant is blocked by `PerTxCap`.
 3. **Run the policy engine tests.** `cd engine && npm ci && npm test && npm run typecheck`
-   See: `Tests  12 passed (12)`, then no typecheck output. The poisoned-page test asserts score `100`, verdict `block`, and findings `injection_phrase`, `drain_language`, `urgency_pressure`, `unknown_merchant`, `merchant_from_untrusted_context`, `high_balance_ratio`.
+   See: `Tests  17 passed (17)`, then no typecheck output. The poisoned-page test asserts score `100`, verdict `block`, and findings `injection_phrase`, `drain_language`, `urgency_pressure`, `unknown_merchant`, `merchant_from_untrusted_context`, `high_balance_ratio`.
 4. **Run the demo agent tests.** `cd demo && npm ci && npm test && npm run typecheck`
    See: `Tests  9 passed (9)`. Covers the hidden-text scraper, the agent planning both the latte and the injected drain, latte `Allowed`, drain `Blocked`/`MerchantNotAllowlisted`, drain to the real merchant `Blocked`/`PerTxCap`, co-sign, velocity, pause.
 5. **Read the real on-chain spend log.** `cd demo && npm run show` (add `--json` for JSON)
@@ -97,6 +97,9 @@ No key and no account needed for steps 1 to 6.
    ```
    See: `create-testnet-accounts.sh` prints `New account <...> created successfully.` four times; `deploy-testnet.sh` ends with a `get_status` JSON; `add-agent-key.sh` ends with `OK: NEAR rejected it: Transaction requires a full permission access key.` and `OK: NEAR rejected it: Transaction method name <pause> isn't allowed by the access key.`; the demo prints `Allowed` for the latte and `Blocked (rule MerchantNotAllowlisted)` for the drain, each with a `https://testnet.nearblocks.io/txns/...` link. The scripts refuse any network except testnet and refuse to write keys inside the repo. They rewrite `deployments/testnet.json` with your accounts (`git checkout deployments/testnet.json` restores ours). With a dirty tree or no Docker the deploy falls back to `cargo near build non-reproducible-wasm`.
 
+10. **Signed engine verdicts (the engine's score is enforced on chain).** `cd contract && cargo test attested` and `cd engine && npx vitest run test/sign.test.ts`
+   See: 12 `tests::attested::*` tests pass, including `verdict_for_latte_cannot_be_reused_for_drain` (same signature with a bigger amount, another merchant or another memo returns `BadAttestation` and spends nothing), `high_risk_score_blocked` (`EngineRisk`), `replayed_nonce_blocked`, `stale_and_future_verdicts_blocked`, `required_mode_blocks_plain_request` (`AttestationRequired`) and `signature_from_typescript_engine_verifies` (a signature made by `engine/src/sign.ts` verifies in the contract with `env::ed25519_verify`, so both sides share one message format). The engine test starts the HTTP service (`engine/src/server.ts`), sends the poisoned drain and gets verdict `block` with a signed score of 60 or more.
+
 ## Contract interface
 
 | Method | Caller | Effect |
@@ -106,6 +109,9 @@ No key and no account needed for steps 1 to 6.
 | `cosign(id) -> SpendResult` | owner only | Approve a `PendingCosign` spend and transfer. |
 | `reject(id) -> SpendResult` | owner only | Refuse a pending spend, release reservation and daily budget. |
 | `set_policy(config)`, `set_agent(agent)`, `pause()`, `unpause()` | owner only | Policy administration. |
+| `request_spend_attested(merchant, amount, memo, attestation) -> SpendResult` | agent only | Like `request_spend`, but first checks an ed25519 signed engine verdict `{score, issued_at_sec, nonce, signature}` over `leash-verdict-v1, contract, merchant, amount, sha256(memo), score, issued_at_sec, nonce`. Blocks with `NoEngineKey`, `BadAttestation` (bad signature, stale, future dated, replayed nonce) or `EngineRisk` (score above `max_risk`), then runs the normal policy. |
+| `set_engine(engine_pk, max_risk, max_age_sec, required)`, `clear_engine()` | owner only | Register the engine key. With `required = true`, plain `request_spend` is blocked with `AttestationRequired`. |
+| `get_engine()` | view | Engine key, limits and last accepted nonce. |
 | `fund()` (payable) | anyone | Top up the budget. |
 | `get_policy()`, `get_status()`, `get_spend(id)`, `get_spends(from_index?, limit?)` | view | Read policy, counters and the spend log. |
 
@@ -129,9 +135,11 @@ Example `SpendResult`:
 | Attacker hides instructions (zero-width chars, homoglyph accounts, lookalikes like `c0ffee`) | Normalization plus findings `hidden_characters`, `non_ascii_merchant`, `lookalike_merchant` | engine |
 | Owner cannot see what happened | Every attempt is logged with rule and reason, plus `EVENT_JSON` events | contract |
 | Emergency | `pause()` blocks all agent spends immediately | contract |
+| Agent skips the engine or forges a low score | Contract verifies the engine's ed25519 signature; `required` mode blocks unsigned spends | contract `AttestationRequired`, `BadAttestation` |
+| A good verdict is reused for a different spend or replayed | Signature covers contract, merchant, amount, memo hash, time and nonce; strictly increasing nonce; max age | contract `BadAttestation` |
 | Unbounded state growth | Memo capped at 256 bytes, velocity buffer capped at 64 entries, paginated views | contract |
 
-Out of scope today, planned: engine verdict is advisory until it runs in a TEE and the contract verifies its attestation.
+Handled since Nov 9: the contract verifies a signed engine verdict and enforces its score. Still planned: run the engine inside a NEAR AI Cloud TEE so the signing key only exists in attested hardware (today the key is a dev key from the environment).
 
 Handled since Nov 3: pending co-sign requests expire after 24 h (anyone can call `expire_pending`); a failed payout is caught by the `on_transfer` callback, logged as `TransferFailed`, and its amount goes back into the daily budget.
 
