@@ -49,3 +49,19 @@ All four accounts were created with the public testnet faucet (`near account cre
 - Deployed wasm sha256: `91114f1a397fb83735e041667a5bad707e51d4eef693441116a48f56a2dd9146` (the 2026-11-02 build above is superseded).
 
 Read the log yourself (no key needed): `cd demo && npm ci && npm run show`.
+
+## Nov 9, 2026: signed engine verdicts live on testnet
+
+Commit `49f5cdc` built with `cargo near build reproducible-wasm` and deployed IN PLACE to `leash-11020911.testnet` (no re-init, state and spend log kept; the engine config lives under its own storage key, so no migration was needed). wasm sha256 `f0dece8904429f79bf70cf360d2e3d2e19a1e53bcf408126a9a16faa2a2dbbd8`.
+
+Run with `scripts/attested-demo.sh`:
+
+| Step | Tx | Result |
+| --- | --- | --- |
+| Owner registers engine key `ed25519:5av2VPczshKNPuE2SGy7FdkgenVEN1M74gZTHbiXAtqr` (max_risk 30, max_age 300 s) | [8fpfssbT...](https://testnet.nearblocks.io/txns/8fpfssbT41YEYs2h1ijRpkc8YHvtedtTuyJXNdoKWxEC) | ok |
+| Agent gets a second function-call key, methods `request_spend`, `request_spend_attested` only | [CSqGDJL3...](https://testnet.nearblocks.io/txns/CSqGDJL32x4qQ9VBwhNPCReY2fQGSXysmVe1j4AA1Pne) | ok |
+| #4 latte 0.05 NEAR, engine score 0, signed | [2p2LXkLq...](https://testnet.nearblocks.io/txns/2p2LXkLqHfgzXLwkRtTuZVngcPLzQN45Gk2tDcXDgtVr) | `Allowed` / `WithinPolicy`, paid |
+| #5 0.1 NEAR to the allowlisted merchant with an injected memo, engine score 60, signed | [H49iuuQc...](https://testnet.nearblocks.io/txns/H49iuuQcLWJCNKRQowpJXZg1BS7fb2JeG27RYVLfg9rT) | `Blocked` / `EngineRisk` (allowlist and caps alone would have paid it) |
+| #6 the latte verdict replayed | [8s1rqY6R...](https://testnet.nearblocks.io/txns/8s1rqY6RcKhhnHQqphxs5QPCXRcZHFMn7CsuRfwmEPnA) | `Blocked` / `BadAttestation` (nonce already used) |
+
+The engine ran locally with a dev seed kept outside the repo. Next: run the same service in a NEAR AI Cloud TEE so the seed is generated inside attested hardware.

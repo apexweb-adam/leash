@@ -7,7 +7,9 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "serve": "npm run build && node dist/server.js"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

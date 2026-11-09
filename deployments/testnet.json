@@ -4,6 +4,6 @@
   "contract": "leash-11020911.testnet",
   "agent": "leash-agent-11020911.testnet",
   "merchant": "leash-coffee-11020911.testnet",
-  "wasm_sha256": "91114f1a397fb83735e041667a5bad707e51d4eef693441116a48f56a2dd9146",
-  "deployed_at": "2026-11-03T08:09:29.892Z"
+  "wasm_sha256": "f0dece8904429f79bf70cf360d2e3d2e19a1e53bcf408126a9a16faa2a2dbbd8",
+  "deployed_at": "2026-11-09T08:18:02.032Z"
 }
