@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Leash dashboard: AI agent spend log on NEAR</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://rpc.testnet.near.org https://rpc.mainnet.near.org https://test.rpc.fastnear.com; img-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://rpc.testnet.near.org https://rpc.mainnet.near.org https://test.rpc.fastnear.com https://free.rpc.fastnear.com; base-uri 'none'; form-action 'none'; img-src 'self' data:">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,9 +19,19 @@
 </header>
 <main>
   <section id="status" class="cards" aria-live="polite"></section>
+  <section class="explain">
+    <h2>What you are looking at</h2>
+    <p>An AI agent on NEAR testnet holds only a function-call key that can call one method, <code>request_spend</code>, on the Leash contract. A poisoned coffee shop page told it to send its whole balance to <code>attacker-vault.testnet</code>. The contract checked the owner's policy and said no. Every attempt, allowed or blocked, is in the log below with the rule that decided it.</p>
+    <p>Rows to look for: the 0.05 NEAR latte <b>Allowed</b>; the 8.36 NEAR drain <b>Blocked / MerchantNotAllowlisted</b>; the 0.6 NEAR inflated receipt <b>Blocked / PerTxCap</b>; a 0.3 NEAR spend <b>Approved</b> after owner co-sign; an injected memo to the allowlisted merchant <b>Blocked / EngineRisk</b> (signed engine score 60, limit 30); a replayed verdict <b>Blocked / BadAttestation</b>.</p>
+    <p>Code and reproducible steps: <a href="https://github.com/apexweb-adam/leash" rel="noopener noreferrer">github.com/apexweb-adam/leash</a>. Contract on the explorer: <a href="https://testnet.nearblocks.io/address/leash-11020911.testnet" rel="noopener noreferrer">leash-11020911.testnet</a>.</p>
+  </section>
   <section>
     <h2>Policy</h2>
     <div id="policy" class="cards"></div>
+  </section>
+  <section>
+    <h2>Policy engine attestation</h2>
+    <div id="engine" class="cards"></div>
   </section>
   <section>
     <h2>Spend log <span id="count"></span></h2>
@@ -33,7 +43,7 @@
   </section>
   <p id="err" class="err" role="alert"></p>
 </main>
-<footer>Read-only. No wallet, no keys. Data comes from the contract view methods <code>get_status</code>, <code>get_policy</code> and <code>get_spends</code> over public NEAR RPC.</footer>
+<footer>Read-only. No wallet, no keys. Data comes from the contract view methods <code>get_status</code>, <code>get_policy</code>, <code>get_engine</code> and <code>get_spends</code> over public NEAR RPC.</footer>
 <script src="leash.js" type="module"></script>
 <script src="app.js" type="module"></script>
 </body>

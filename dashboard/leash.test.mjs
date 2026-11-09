@@ -32,3 +32,17 @@ test("loadAllSpends pages through the log", async () => {
   const out = await loadAllSpends("testnet", "leash-11020911.testnet", 120, fake, 50);
   assert.equal(out.length, 120); assert.equal(calls.length, 3); assert.equal(out[119].id, 119);
 });
+
+test("view falls back to the next RPC endpoint", async () => {
+  const urls = [];
+  const fake = async (u) => {
+    urls.push(u);
+    if (urls.length === 1) throw new Error("429");
+    return { json: async () => ({ result: { result: [...new TextEncoder().encode('{"ok":1}')] } }) };
+  };
+  assert.deepEqual(await view("testnet", "leash-11020911.testnet", "get_engine", {}, fake), { ok: 1 });
+  assert.equal(urls.length, 2); assert.notEqual(urls[0], urls[1]);
+});
+test("view rejects odd method names", async () => {
+  await assert.rejects(view("testnet", "leash-11020911.testnet", "get_status;drop", {}, () => { throw new Error("no"); }));
+});

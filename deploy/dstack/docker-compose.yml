@@ -1,0 +1,20 @@
+# App compose for the Leash engine in a dstack CVM (NEAR AI Cloud or Phala Cloud).
+# The hash of this exact file content is measured into MRCONFIGID, so judges and
+# the contract owner can check which image runs: `npm run tee -- engine --url ... --image sha256:<digest>`.
+# Replace the image reference with the pushed digest (never a mutable tag).
+services:
+  leash-engine:
+    image: ghcr.io/apexweb-adam/leash-engine@sha256:REPLACE_WITH_PUSHED_DIGEST
+    restart: always
+    environment:
+      LEASH_TEE: dstack
+      LEASH_CONTRACT: leash-11020911.testnet
+      LEASH_KNOWN_MERCHANTS: leash-coffee-11020911.testnet
+      # Optional attested judge. Set NEAR_AI_API_KEY as an encrypted secret in the
+      # dashboard (dstack encrypts it to the CVM), never in this file.
+      LEASH_JUDGE_MODEL: Qwen/Qwen3.6-35B-A3B-FP8
+      NEAR_AI_API_KEY: ${NEAR_AI_API_KEY}
+    ports:
+      - "8787:8787"
+    volumes:
+      - /var/run/dstack.sock:/var/run/dstack.sock

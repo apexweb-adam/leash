@@ -16,6 +16,12 @@ Deadline: repository public and submission sent before 2026-11-14T23:59Z (Nov 15
 - `demo/`: gullible agent reads a poisoned coffee shop page, engine scores each intent, every intent goes to the contract anyway. On testnet: latte `Allowed`, drain of 8.36 NEAR to `attacker-vault.testnet` `Blocked`/`MerchantNotAllowlisted`. Offline simulator for keyless runs, `npm run show` reads the on-chain log. 9 vitest tests.
 - README "do X, see Y" steps 1 to 9.
 
+## Done (Nov 9, second pass)
+
+- Dashboard hosted: https://leash-near.apexweb-adam.workers.dev/ (Cloudflare Worker, strict security headers, RPC fallback, engine panel, judge explainer). Vercel team was blocked by fair-use limits, so Cloudflare was used.
+- NEAR Intents: `demo/src/intents.ts`, owner route check, 1Click dry EXACT_OUTPUT quote, quote verification, policy on `amountIn`, `npm run intents`. 11 tests. Live quote recorded in `demo/fixtures/intents-dry-quote.json`.
+- TEE: `engine/src/tee.ts` verifier, live VERIFIED against NEAR AI Cloud gateway and a model CVM with Intel DCAP `UpToDate`; `nearai-judge.ts` with exact-byte `provider_tee` signature check; engine TEE mode (dstack KMS seed, `/attestation`), Dockerfile, dstack compose, `npm run tee -- engine` for the owner. 15 new engine tests.
+
 ## Remaining
 
 | Day | Work | Done when |

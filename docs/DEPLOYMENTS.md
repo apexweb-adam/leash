@@ -65,3 +65,10 @@ Run with `scripts/attested-demo.sh`:
 | #6 the latte verdict replayed | [8s1rqY6R...](https://testnet.nearblocks.io/txns/8s1rqY6RcKhhnHQqphxs5QPCXRcZHFMn7CsuRfwmEPnA) | `Blocked` / `BadAttestation` (nonce already used) |
 
 The engine ran locally with a dev seed kept outside the repo. Next: run the same service in a NEAR AI Cloud TEE so the seed is generated inside attested hardware.
+
+## Nov 9, 2026: hosted dashboard, Intents and TEE checks
+
+- Dashboard: https://leash-near.apexweb-adam.workers.dev/ (Cloudflare Worker `leash-near`, static files only, built by `dashboard/deploy/build-worker.mjs`). Reads the live log above over public RPC. Keep online until at least Nov 25.
+- NEAR Intents 1Click dry quote, mainnet API, no funds: 4.50 USDC on Base (`nep141:base-0x8335...2913.omft.near`) quoted at about 1.29 wNEAR, 20 bps 1Click fee, ~24 s. Recorded in `demo/fixtures/intents-dry-quote.json`.
+- NEAR AI Cloud TEE evidence verified live (no key): gateway `dstack-0.5.12` and model `Qwen/Qwen3.6-35B-A3B-FP8` on `dstack-nvidia-0.5.12`, all 7 checks PASS including Intel DCAP `UpToDate`. Recorded gateway report in `engine/test/fixtures/nearai-gateway-report.json`.
+- Not yet: engine in a hosted CVM (needs a TEE host account), so the registered testnet engine key is still the dev key.

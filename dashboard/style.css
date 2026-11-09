@@ -7,3 +7,6 @@ input,select,button{background:var(--card);color:var(--fg);border:1px solid var(
 table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}th{color:var(--mut);font-weight:500}td.memo,td.reason{max-width:280px;word-break:break-word}
 .pill{border-radius:999px;padding:2px 8px;font-size:12px;font-weight:600}.Allowed,.Approved{background:#12361f;color:var(--ok)}.Blocked,.Rejected,.TransferFailed{background:#3d1416;color:var(--bad)}.PendingCosign{background:#3a2c0b;color:var(--wait)}.Expired{background:#222;color:var(--mut)}
 .filters button{margin-right:6px;font-size:12px}.filters button.on{background:var(--info);color:#000}.err{color:var(--bad)}footer{color:var(--mut);font-size:12px}
+.explain p { max-width: 70em; line-height: 1.5; }
+.explain a { color: inherit; }
+.card b { word-break: break-all; }

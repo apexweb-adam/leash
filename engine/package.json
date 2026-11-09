@@ -9,11 +9,15 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
-    "serve": "npm run build && node dist/server.js"
+    "serve": "npm run build && node dist/server.js",
+    "tee": "tsc -p tsconfig.build.json && node dist/tee-cli.js"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
     "typescript": "^5.6.0",
     "vitest": "^4.1.12"
+  },
+  "dependencies": {
+    "@phala/dcap-qvl": "0.7.1"
   }
 }

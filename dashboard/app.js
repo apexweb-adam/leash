@@ -48,6 +48,11 @@ async function load() {
       card("daily cap", formatNear(policy.daily_cap)), card("co-sign at or above", formatNear(policy.cosign_threshold)),
       card("velocity", `${policy.velocity_max_tx} tx / ${policy.velocity_window_sec}s`));
     renderFilters(sum.byStatus); renderLog();
+    let eng = null; try { eng = await view(network, contract, "get_engine"); } catch { /* older contract without engine */ }
+    $("engine").replaceChildren(...(eng ? [
+      card("engine key (verdicts signed with ed25519)", eng.engine_pk), card("max risk score", String(eng.max_risk)),
+      card("max verdict age", `${eng.max_age_sec}s`), card("signed verdict required", eng.required ? "yes" : "no (opt-in per spend)"),
+      card("last accepted nonce", String(eng.last_nonce))] : [card("engine", "not registered")]));
     const u = new URL(location); u.searchParams.set("network", network); u.searchParams.set("contract", contract); history.replaceState(null, "", u);
   } catch (e) { $("err").textContent = `Could not load: ${e.message}`; }
 }

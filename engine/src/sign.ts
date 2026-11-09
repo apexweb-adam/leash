@@ -90,3 +90,15 @@ export function signVerdict(
   const sig = edSign(null, Buffer.from(msg, "utf8"), opts.key);
   return { score: assessment.score, issued_at_sec: opts.nowSec, nonce: opts.nonce, signature: sig.toString("base64") };
 }
+
+/** NEAR formatted key from raw 32-byte ed25519 public key hex (as in a TEE report's signing_address). */
+export function nearPublicKeyFromHex(hex: string): string {
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) throw new Error("ed25519 public key must be 32 bytes hex");
+  return "ed25519:" + base58(Buffer.from(hex, "hex"));
+}
+
+/** Raw 32-byte public key hex of a private key. */
+export function publicKeyHex(key: KeyObject): string {
+  const spki = createPublicKey(key).export({ format: "der", type: "spki" });
+  return Buffer.from(spki.subarray(spki.length - 32)).toString("hex");
+}

@@ -4,23 +4,37 @@
  *   LEASH_ENGINE_SEED_HEX=<64 hex>  LEASH_CONTRACT=leash-11020911.testnet \
  *   LEASH_KNOWN_MERCHANTS=leash-coffee-11020911.testnet  node dist/server.js
  *
- * POST /assess  {intent, balance}  ->  {assessment, attestation}
- * GET  /key                        ->  {public_key}
+ * POST /assess  {intent, balance}  ->  {assessment, attestation, judge?}
+ * GET  /key                        ->  {public_key, public_key_hex, contract, tee}
+ * GET  /attestation?nonce=<64 hex> ->  TDX quote over public_key || nonce (TEE only)
  *
- * Binds to 127.0.0.1 by default. The seed is read from the environment only
- * and is never logged or returned.
+ * In a dstack CVM (NEAR AI Cloud or Phala Cloud) set LEASH_TEE=dstack and no
+ * seed: the signing seed is derived from the app's KMS key inside the TEE, so
+ * no human ever sees it. Outside a TEE, LEASH_ENGINE_SEED_HEX is a dev key.
+ * NEAR_AI_API_KEY + LEASH_JUDGE_MODEL turn on the attested model judge.
+ *
+ * Binds to 127.0.0.1 by default. Secrets come from the environment only and
+ * are never logged or returned.
  */
 import { createServer } from "node:http";
 import { assess, type SpendIntent } from "./index.js";
-import { keyFromSeedHex, nearPublicKey, signVerdict } from "./sign.js";
+import { keyFromSeedHex, nearPublicKey, publicKeyHex, signVerdict } from "./sign.js";
+import { DSTACK_SOCKET, deriveEngineSeed, engineReport } from "./tee.js";
+import { combineScore, judge, type JudgeResult } from "./nearai-judge.js";
 
 const MAX_BODY = 16 * 1024;
 
-export function startServer(env: NodeJS.ProcessEnv = process.env) {
-  const seed = env.LEASH_ENGINE_SEED_HEX;
+export async function startServer(env: NodeJS.ProcessEnv = process.env) {
+  const tee = env.LEASH_TEE === "dstack";
+  const socket = env.DSTACK_SOCKET ?? DSTACK_SOCKET;
   const contract = env.LEASH_CONTRACT;
-  if (!seed || !contract) throw new Error("LEASH_ENGINE_SEED_HEX and LEASH_CONTRACT are required");
+  if (!contract) throw new Error("LEASH_CONTRACT is required");
+  if (tee && env.LEASH_ENGINE_SEED_HEX) throw new Error("in TEE mode the seed must come from the TEE, unset LEASH_ENGINE_SEED_HEX");
+  const seed = tee ? await deriveEngineSeed(socket) : env.LEASH_ENGINE_SEED_HEX;
+  if (!seed) throw new Error("LEASH_ENGINE_SEED_HEX is required outside a TEE (or set LEASH_TEE=dstack)");
   const key = keyFromSeedHex(seed);
+  const pkHex = publicKeyHex(key);
+  const judgeKey = env.NEAR_AI_API_KEY ?? "", judgeModel = env.LEASH_JUDGE_MODEL ?? "";
   const known = (env.LEASH_KNOWN_MERCHANTS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   // Nonces must grow across restarts: start from the clock in milliseconds.
   let nonce = Date.now();
@@ -30,7 +44,14 @@ export function startServer(env: NodeJS.ProcessEnv = process.env) {
       res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store" });
       res.end(JSON.stringify(body));
     };
-    if (req.method === "GET" && req.url === "/key") return send(200, { public_key: nearPublicKey(key), contract });
+    if (req.method === "GET" && req.url === "/key") return send(200, { public_key: nearPublicKey(key), public_key_hex: pkHex, contract, tee: tee ? "dstack" : "none" });
+    if (req.method === "GET" && req.url?.startsWith("/attestation")) {
+      const n = new URL(req.url, "http://x").searchParams.get("nonce") ?? "";
+      if (!/^[0-9a-f]{64}$/.test(n)) return send(400, { error: "nonce must be 32 bytes lowercase hex" });
+      if (!tee) return send(501, { error: "not running in a TEE (dev key): nothing to attest" });
+      engineReport(pkHex, n, socket).then((r) => send(200, r), () => send(502, { error: "TEE quote unavailable" }));
+      return;
+    }
     if (req.method !== "POST" || req.url !== "/assess") return send(404, { error: "not found" });
     let size = 0;
     const chunks: Buffer[] = [];
@@ -50,9 +71,17 @@ export function startServer(env: NodeJS.ProcessEnv = process.env) {
           return send(400, { error: "intent {merchant, amount, memo} required" });
         }
         const assessment = assess(i, { knownMerchants: known, balance: body.balance ?? "0" });
-        nonce += 1;
-        const attestation = signVerdict(i, assessment, { contract, nonce, nowSec: Math.floor(Date.now() / 1000), key });
-        send(200, { assessment, attestation });
+        const finish = (j?: JudgeResult) => {
+          if (j) {
+            assessment.score = combineScore(assessment.score, j);
+            assessment.verdict = assessment.score >= 60 ? "block" : assessment.score >= 30 ? "review" : assessment.verdict;
+          }
+          nonce += 1;
+          const attestation = signVerdict(i, assessment, { contract, nonce, nowSec: Math.floor(Date.now() / 1000), key });
+          send(200, { assessment, attestation, ...(j ? { judge: j } : {}) });
+        };
+        if (judgeKey && judgeModel) judge(i, { apiKey: judgeKey, model: judgeModel }).then(finish, () => finish({ verified: false, reason: "judge error" }));
+        else finish();
       } catch (e) {
         send(400, { error: e instanceof Error ? e.message : "bad request" });
       }
